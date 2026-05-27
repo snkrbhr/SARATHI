@@ -1,0 +1,27 @@
+# SARATHI — Requirements
+# Python >= 3.10 required (uses PEP 604 union types: X | Y, and PEP 585 built-in generics: list[...])
+#
+# Install:
+#   pip install -r requirements.txt
+
+# ── Core deep learning ─────────────────────────────────────────────────────────
+torch>=2.0.0
+torchvision>=0.15.0          # optional, needed only if torchvision ops are used
+
+# ── HuggingFace ecosystem ─────────────────────────────────────────────────────
+transformers>=4.38.0          # LlamaForCausalLM, MistralForCausalLM, OPTForCausalLM
+datasets>=2.14.0              # WikiText-2, C4 calibration data
+accelerate>=0.27.0            # device_map='auto' for multi-GPU (13B+ models)
+safetensors>=0.4.0            # fast model weight loading/saving
+
+# ── Scientific computing ───────────────────────────────────────────────────────
+numpy>=1.24.0
+scipy>=1.10.0                 # used in some analysis scripts
+
+# ── Evaluation ─────────────────────────────────────────────────────────────────
+lm-eval>=0.4.0                # zero-shot evaluation (PIQA, ARC, HellaSwag, WinoGrande)
+
+# ── Utilities ──────────────────────────────────────────────────────────────────
+tqdm>=4.65.0
+tabulate>=0.9.0               # results table formatting
+matplotlib>=3.7.0             # plotting (optional, for analysis scripts)
