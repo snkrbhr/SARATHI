@@ -1,4 +1,4 @@
-# SARATHI: Structured Pruning of LLMs via NMF Residual Subspace Probing
+# SARATHI: Decoupled Data-Free Probing and Adaptive Reconstruction for Structured LLM Pruning
 
 > **EMNLP 2026 Anonymous Submission**
 
