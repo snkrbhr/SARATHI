@@ -25,7 +25,7 @@ Dense LLM
 
 ---
 
-This repository implements the SARATHI pruning method for Large Language Models. (EMNLP 2025 Anonymous Submission)
+This repository implements the SARATHI pruning method for Large Language Models. (EMNLP 2026 Anonymous Submission)
 
 ---
 
@@ -218,10 +218,10 @@ All experiments use:
 If you find this code useful for your research, please consider citing our paper. This citation will be updated following the double-blind review process.
 
 ```bibtex
-@inproceedings{anonymous2025sarathi,
+@inproceedings{anonymous2026sarathi,
   title={SARATHI: Structured Pruning of LLMs via NMF Residual Subspace Probing},
   author={Anonymous Authors},
-  booktitle={Under Review (EMNLP 2025)},
-  year={2025}
+  booktitle={Under Review (EMNLP 2026)},
+  year={2026}
 }
 ```
