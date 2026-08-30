@@ -127,8 +127,8 @@ def sarathi_adaptive_slice(
         else:
             keep_indices = mad_indices
 
-        keep_indices, _ = torch.sort(keep_indices)
-        adaptive_sizes.append(n_survive)
+        keep_indices, _ = torch.sort(keep_indices)  # preserve weight order
+        adaptive_sizes.append(len(keep_indices))
         slice_mlp_layer(model_name, lns.layer, keep_indices)
 
     total_kept  = sum(adaptive_sizes)

@@ -249,15 +249,21 @@ def load_wikitext_calib_tokens(
     from datasets import load_dataset, Dataset
 
     # 1. Standard HF hub parquet path
-    wiki_parquet = os.path.expanduser(
-        "~/.cache/huggingface/hub/datasets--wikitext/snapshots/"
-        "b08601e04326c79dfdd32d625aee71d232d685c3/"
-        "wikitext-2-raw-v1/train-00000-of-00001.parquet"
-    )
+    import glob
+    wiki_parquet = ""
+    for pattern in [
+        "~/.cache/huggingface/hub/datasets--wikitext/snapshots/*/wikitext-2-raw-v1/train-00000-of-00001.parquet",
+        "~/.cache/huggingface/hub/datasets--Salesforce--wikitext/snapshots/*/wikitext-2-raw-v1/train-00000-of-00001.parquet",
+    ]:
+        matches = glob.glob(os.path.expanduser(pattern))
+        if matches:
+            wiki_parquet = matches[0]
+            break
+
     # 2. Override via environment variable (set this on your cluster)
     env_path = os.environ.get("SARATHI_WIKITEXT_PATH", "")
 
-    if os.path.exists(wiki_parquet):
+    if wiki_parquet and os.path.exists(wiki_parquet):
         logging.info(f"[SARATHI] Loading WikiText-2 from parquet: {wiki_parquet}")
         raw = load_dataset("parquet", data_files=wiki_parquet, split="train")
     elif env_path and os.path.exists(env_path):
@@ -343,10 +349,8 @@ def load_c4_calib_tokens(
     seq_len: int = 2048,
 ) -> torch.Tensor:
     """
-    Load C4 calibration tokens from a locally cached JSON subset.
-    Used for OPT models (SoBP protocol: 128 samples, seq_len=2048).
-
-    Reads from SARATHI_C4_PATH environment variable.
+    Load C4 calibration tokens from the locally cached subset.
+    Used for OPT models as per the SoBP (EMNLP 2024) protocol.
 
     Returns:
         Tensor of shape [n_samples, seq_len] (Long).
@@ -371,7 +375,7 @@ def load_c4_calib_tokens(
     chunks = []
     for i in range(0, len(tokens) - seq_len, seq_len):
         chunks.append(tokens[i : i + seq_len])
-        if len(chunks) >= n_samples:
+        if len(chunks) == n_samples:
             break
 
     logging.info(f"[SARATHI] C4 calibration: {len(chunks)} chunks × {seq_len} tokens")

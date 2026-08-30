@@ -332,7 +332,8 @@ def score_variant_e(
         if mr_gate is not None:
             # SwiGLU architecture (LLaMA, Mistral)
             η_gate = _mag_weighted_survival(mr_gate.mask, mr_gate.weight)
-            eta    = (η_gate + η_up + η_down) / 3.0
+            # Use additive coupling for gate and up as defined in the paper
+            eta = (η_gate + η_up + η_down) / 3.0
         else:
             # Non-gated (OPT)
             eta = (η_up + η_down) / 2.0

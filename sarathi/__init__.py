@@ -1,7 +1,7 @@
 """
 SARATHI: Structured Pruning of LLMs via NMF Residual Subspace Probing
 ======================================================================
-EMNLP 2026 Anonymous Submission.
+EMNLP 2026.
 
 Method overview:
   1. NMF Residual Subspace Probe  — data-free, weight-geometry-based neuron

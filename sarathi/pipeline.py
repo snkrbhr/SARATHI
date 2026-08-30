@@ -215,6 +215,18 @@ def apply_sarathi_pruning(
                 f"max={max(len(x) for x in per_layer_keep_indices)})"
             )
             stats["adaptive_sizes"] = [len(x) for x in per_layer_keep_indices]
+            
+        else:
+            # Uniform mode: seed OBS with variant-specific top-K ordering.
+            # Without this, OBS ignores Wanda/NMF scores and produces identical models!
+            orig_size = layer_scores[0].scores.shape[0]
+            K = int(orig_size * (1.0 - structured_ratio))
+            per_layer_keep_indices = []
+            for lns in layer_scores:
+                _, top_idx = torch.topk(lns.scores, K, largest=True)
+                keep_indices, _ = torch.sort(top_idx)
+                per_layer_keep_indices.append(keep_indices.cpu())
+            logging.info(f"[Pipeline] Uniform OBS: K={K} neurons/layer kept (variant-score-seeded)")
 
         device = next(model.parameters()).device
         obs_reconstruct(
