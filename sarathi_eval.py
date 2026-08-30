@@ -37,9 +37,9 @@ import os
 import sys
 from pathlib import Path
 
-os.environ["HF_HUB_OFFLINE"]      = "1"
-os.environ["HF_DATASETS_OFFLINE"] = "1"
-os.environ["HF_EVALUATE_OFFLINE"] = "1"
+# os.environ["HF_HUB_OFFLINE"]      = "1"
+# os.environ["HF_DATASETS_OFFLINE"] = "1"
+# os.environ["HF_EVALUATE_OFFLINE"] = "1"
 
 import torch
 
@@ -71,6 +71,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Explicit output path for JSON results. Overrides --output-dir/--output-name.")
     parser.add_argument("--multi-gpu", action="store_true",
                         help="Use device_map='auto' for multi-GPU inference.")
+    parser.add_argument("--ppl", action="store_true", default=False,
+                        help="Also compute WikiText-2 perplexity (stride=512).")
     return parser
 
 
@@ -158,25 +160,36 @@ def load_pruned_model(model_path: str, device=None, device_map=None, **kwargs):
         return dense_model
 
     # Load state dict
-    import safetensors.torch, glob as _glob
-    st_path = os.path.join(model_path, "model.safetensors")
-    bin_path = os.path.join(model_path, "pytorch_model.bin")
-    if os.path.exists(st_path):
-        sd = safetensors.torch.load_file(st_path, device=target_device)
-    elif os.path.exists(bin_path):
-        sd = torch.load(bin_path, map_location=target_device, weights_only=False)
-    else:
-        # Sharded safetensors
-        idx_path = os.path.join(model_path, "model.safetensors.index.json")
-        with open(idx_path) as f:
-            index = _json.load(f)
-        weight_files = set(index["weight_map"].values())
-        sd = {}
-        for wf in weight_files:
-            sd.update(safetensors.torch.load_file(os.path.join(model_path, wf), device=target_device))
+    state_dict_path = os.path.join(model_path, "pytorch_model.bin")
+    if not os.path.exists(state_dict_path):
+        import safetensors.torch
+        state_dict_path = os.path.join(model_path, "model.safetensors")
+        if not os.path.exists(state_dict_path):
+            state_dict_path = os.path.join(model_path, "model.safetensors.index.json")  # sharded
+            if os.path.exists(os.path.join(model_path, "pytorch_model.bin.index.json")) or os.path.exists(os.path.join(model_path, "model.safetensors.index.json")):
+                import json
+                import safetensors.torch
+                logging.info("Loading sharded safetensors manually...")
+                index_path = os.path.join(model_path, "model.safetensors.index.json")
+                with open(index_path) as f:
+                    index = json.load(f)
+                weight_files = set(index["weight_map"].values())
+                state_dict = {}
+                for wf in weight_files:
+                    state_dict.update(safetensors.torch.load_file(os.path.join(model_path, wf), device=str(target_device)))
+                dense_model.load_state_dict(state_dict, strict=False)
+                logging.info("Adaptive model loaded successfully!")
+                return dense_model
 
-    dense_model.load_state_dict(sd, strict=False)
-    logging.info("[SARATHI] Adaptive model loaded successfully.")
+    logging.info(f"Loading single state dict from {state_dict_path}")
+    if state_dict_path.endswith(".safetensors"):
+        import safetensors.torch
+        state_dict = safetensors.torch.load_file(state_dict_path, device=target_device)
+    else:
+        state_dict = torch.load(state_dict_path, map_location=target_device, weights_only=False)
+
+    dense_model.load_state_dict(state_dict, strict=False)
+    logging.info("Adaptive model loaded successfully!")
     return dense_model
 
 
@@ -254,6 +267,37 @@ def main() -> None:
         print(f"  {'Average':<22} {avg:.2f}%")
     print("=" * 60 + "\n")
 
+    # ── WikiText-2 Perplexity ─────────────────────────────────────────────────
+    ppl_value = None
+    if args.ppl:
+        logging.info("Computing WikiText-2 Perplexity (seq_len=2048) ...")
+        try:
+            from datasets import load_dataset
+            import math
+            wikitext = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
+            text = "\n\n".join(wikitext["text"])
+            encodings = tokenizer(text, return_tensors="pt")
+            input_ids = encodings.input_ids[0]
+            
+            seq_len = 2048
+            seqs = []
+            for i in range(0, input_ids.size(0) - seq_len, seq_len):
+                seqs.append(input_ids[i : i + seq_len])
+            test_seqs = torch.stack(seqs)
+            
+            nlls = []
+            with torch.no_grad():
+                for seq in test_seqs:
+                    inp = seq.unsqueeze(0).to(device)
+                    outputs = model(inp, labels=inp.clone())
+                    nlls.append(outputs.loss)
+                    
+            ppl_value = torch.exp(torch.stack(nlls).mean()).item()
+            logging.info(f"WikiText-2 PPL: {ppl_value:.2f}")
+            print(f"WikiText-2 PPL: {ppl_value:.2f}")
+        except Exception as e:
+            logging.warning(f"PPL computation failed: {e}")
+
     # Save results
     if args.output_file:
         out_file = Path(args.output_file)
@@ -264,8 +308,12 @@ def main() -> None:
         stem     = args.output_name or f"eval_{Path(load_path).name}"
         out_file = out_dir / f"{stem}.json"
 
+    out_dict = {"args": vars(args), "results": results["results"]}
+    if ppl_value is not None:
+        out_dict["wikitext_ppl"] = ppl_value
+
     with open(out_file, "w") as f:
-        json.dump({"args": vars(args), "results": results["results"]}, f, indent=2)
+        json.dump(out_dict, f, indent=2)
     logging.info(f"[SARATHI] Results saved to {out_file}")
 
 

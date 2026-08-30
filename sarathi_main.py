@@ -49,9 +49,10 @@ import random
 import sys
 from pathlib import Path
 
-import os
-os.environ["HF_HUB_OFFLINE"]      = "1"
-os.environ["HF_DATASETS_OFFLINE"] = "1"
+# Offline mode: controlled via environment variable.
+# Set HF_HUB_OFFLINE=1 and HF_DATASETS_OFFLINE=1 in your shell/bash script if needed.
+# Do NOT hardcode here so lm-eval can still reach HuggingFace for task configs.
+
 
 import numpy as np
 import torch

@@ -1,12 +1,11 @@
 # SARATHI — Environment Setup Guide
-# EMNLP 2026 Anonymous Submission
 
 This document covers everything needed to reproduce SARATHI experiments from scratch —
 from environment creation to running pruning and evaluation.
 
 ---
 
-## ⚠️ Python Version Requirement
+## Python Version Requirement
 
 > **Python 3.10 or higher is required.**
 
@@ -135,13 +134,13 @@ scores = np.random.rand(10000)
 t = find_mad_threshold(scores, 0.25)
 assert isinstance(t, float), "Threshold type error"
 
-print("✅ Environment OK — SARATHI sarathi/ package imports correctly.")
+print("Environment OK — SARATHI sarathi/ package imports correctly.")
 EOF
 ```
 
 Expected output:
 ```
-✅ Environment OK — SARATHI sarathi/ package imports correctly.
+Environment OK — SARATHI sarathi/ package imports correctly.
 ```
 
 ---

@@ -13,7 +13,8 @@ Dense LLM
     |
     |-- Phase 2: MAGNITUDE-WEIGHTED SCORING  (SwiGLU-aware)
     |       eta_i = sum_j (|W[i,j]| * M[i,j])   for gate, up, down projections
-    |       SwiGLU: eta = (eta_gate + eta_up + eta_down) / 3
+    |       SwiGLU (current ★): eta = (eta_gate + eta_up + eta_down) / 3   [Additive — matches original results]
+    |       Non-gated (OPT):    eta = (eta_up + eta_down) / 2
     |
     |-- Phase 3: STRUCTURED SLICE
     |       Keep Top-K neurons per layer -> permanently reduced intermediate_size
@@ -118,12 +119,12 @@ python sarathi_eval.py \
 ## Project Structure
 
 ```text
-sarathi_submission/
+SARATHI/
 |
 |-- sarathi_main.py              # CLI entry point (pruning)
 |-- sarathi_eval.py              # Evaluation entry point
 |-- requirements.txt
-|-- ENVIRONMENT_SETUP.md         # Detailed setup instructions
+|-- ENVIRONMENT_SETUP.md         # Detailed cluster/environment setup
 |
 +-- sarathi/                     # Core SARATHI package
     |-- __init__.py
@@ -159,7 +160,7 @@ sarathi_submission/
 | `--nmf-iters` | `100` | NMF multiplicative update iterations |
 | `--n-calib` | `128` | Calibration samples (Variants B, C; OBS) |
 | `--obs-reconstruct` | `False` | Enable Adaptive OBS Weight Reconstruction |
-| `--obs-damping` | `1e-6` | Tikhonov regularisation for Cholesky solve |
+| `--obs-damping` | `1e-6` | Tikhonov regularisation for Cholesky solve (paper §3.1 uses `0.01`) |
 | `--adaptive` | `False` | Adaptive slicing (Global MAD threshold, variable K/layer) |
 | `--multi-gpu` | `False` | Multi-GPU loading for 13B+ models |
 | `--seed` | `42` | Random seed |
@@ -175,35 +176,8 @@ sarathi_submission/
 
 ---
 
-## Main Results
+## Reproducibility
 
-### WikiText-2 Perplexity (lower is better)
-| Method | LLaMA-3-8B (25%) | Mistral-7B (25%) | OPT-2.7B (40%) | OPT-6.7B (40%) |
-|:---|:---:|:---:|:---:|:---:|
-| Dense | 6.14 | 5.25 | 12.47 | 10.86 |
-| SliceGPT | 8.92 | 7.41 | 28.73 | OOM |
-| SoBP | 8.11 | 6.89 | 22.34 | OOM |
-| Dynamic Slicing | 8.44 | 7.12 | 25.61 | OOM |
-| **SARATHI (ours)** | **7.53** | **6.31** | **18.98** | **16.42** |
-
-*OPT-6.7B at 40% sparsity: SARATHI is the only method that completes without OOM. All baselines crash due to coupled O(Ld^2) Hessian caching.*
-
-### Zero-Shot Accuracy (5-task average, higher is better)
-| Method | LLaMA-3-8B (25%) | Mistral-7B (25%) |
-|:---|:---:|:---:|
-| Dense | 72.8 | 71.3 |
-| SliceGPT | 62.1 | 60.4 |
-| SoBP | 64.7 | 62.9 |
-| **SARATHI (ours)** | **67.4** | **65.8** |
-| **SARATHI-Wanda (ours)** | **68.9** | **67.1** |
-
-### Ablation: Bias Shift Compensation (OPT-2.7B, 40% sparsity)
-| Configuration | WikiText-2 PPL |
-|:---|:---:|
-| SARATHI without Bias Shift Compensation | 2,082.4 |
-| **SARATHI with Bias Shift Compensation** | **18.98** |
-
-### Reproducibility
 All experiments use:
 - `--seed 42`
 - `--n-calib 128` (when calibration is used)
@@ -211,17 +185,25 @@ All experiments use:
 - `--nmf-rank 7`, `--nmf-iters 100`
 - `--probe-sigma 0.10`
 
+### OPT Calibration Dataset
+
+OPT models **must** use the C4 calibration dataset to avoid distribution shift:
+```bash
+export SARATHI_C4_PATH=/path/to/c4_calibration_subset.json
+python sarathi_main.py --model facebook/opt-6.7b --calib-dataset c4 ...
+```
+Using WikiText for OPT causes significant accuracy degradation.
+
 ---
 
 ## Citation
 
-If you find this code useful for your research, please consider citing our paper. This citation will be updated following the double-blind review process.
+If you find this code useful for your research, please cite our paper:
 
 ```bibtex
-@inproceedings{anonymous2026sarathi,
-  title={SARATHI: Structured Pruning of LLMs via NMF Residual Subspace Probing},
-  author={Anonymous Authors},
-  booktitle={Under Review (EMNLP 2026)},
+@inproceedings{sarathi2026,
+  title={SARATHI: Decoupled Data-Free Probing and Adaptive Reconstruction for Structured LLM Pruning},
+  booktitle={Proceedings of the 2026 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
   year={2026}
 }
 ```
