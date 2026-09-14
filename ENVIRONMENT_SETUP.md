@@ -1,4 +1,5 @@
 # SARATHI — Environment Setup Guide
+# EMNLP 2026 Anonymous Submission
 
 This document covers everything needed to reproduce SARATHI experiments from scratch —
 from environment creation to running pruning and evaluation.

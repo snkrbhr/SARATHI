@@ -159,7 +159,7 @@ def load_pruned_model(model_path: str, device=None, device_map=None, **kwargs):
         )
         return dense_model
 
-    # Load state dict
+    # Load state dict (exactly as in isea11 guide)
     state_dict_path = os.path.join(model_path, "pytorch_model.bin")
     if not os.path.exists(state_dict_path):
         import safetensors.torch

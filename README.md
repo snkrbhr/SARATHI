@@ -19,8 +19,10 @@ Dense LLM
     |-- Phase 3: STRUCTURED SLICE
     |       Keep Top-K neurons per layer -> permanently reduced intermediate_size
     |
-    +-- Phase 4: ADAPTIVE OBS RECONSTRUCTION  (optional, O(d^2) per layer)
-            Cholesky least-squares solve per layer
+    +-- Phase 4: ADAPTIVE OBS RECONSTRUCTION  (O(d^2) per layer)
+            Iterative Greedy OBS Weight Reconstruction
+            - Gated FFN (LLaMA/Mistral): Strict Decoupling (forced indices)
+            - Non-gated FFN (OPT): Adaptive Budget + Greedy Selection
             + Bias Shift Compensation (post-LayerNorm correction)
 ```
 
@@ -119,12 +121,12 @@ python sarathi_eval.py \
 ## Project Structure
 
 ```text
-SARATHI/
+sarathi_submission/
 |
 |-- sarathi_main.py              # CLI entry point (pruning)
 |-- sarathi_eval.py              # Evaluation entry point
 |-- requirements.txt
-|-- ENVIRONMENT_SETUP.md         # Detailed cluster/environment setup
+|-- ENVIRONMENT_SETUP.md         # Detailed setup instructions
 |
 +-- sarathi/                     # Core SARATHI package
     |-- __init__.py
@@ -160,7 +162,7 @@ SARATHI/
 | `--nmf-iters` | `100` | NMF multiplicative update iterations |
 | `--n-calib` | `128` | Calibration samples (Variants B, C; OBS) |
 | `--obs-reconstruct` | `False` | Enable Adaptive OBS Weight Reconstruction |
-| `--obs-damping` | `1e-6` | Tikhonov regularisation for Cholesky solve (paper §3.1 uses `0.01`) |
+| `--obs-damping` | `1e-6` | Tikhonov regularisation for Iterative OBS solve (paper §3.1 uses `0.01`) |
 | `--adaptive` | `False` | Adaptive slicing (Global MAD threshold, variable K/layer) |
 | `--multi-gpu` | `False` | Multi-GPU loading for 13B+ models |
 | `--seed` | `42` | Random seed |
@@ -176,8 +178,7 @@ SARATHI/
 
 ---
 
-## Reproducibility
-
+### Reproducibility
 All experiments use:
 - `--seed 42`
 - `--n-calib 128` (when calibration is used)
@@ -185,25 +186,30 @@ All experiments use:
 - `--nmf-rank 7`, `--nmf-iters 100`
 - `--probe-sigma 0.10`
 
-### OPT Calibration Dataset
+### Architecture-Specific Neuron Selection (See Paper §4)
+To maximize performance and align with the theoretical behavior described in the paper, the codebase automatically adapts its neuron selection strategy based on the model architecture during Phase 4:
+- **Gated FFN (LLaMA, Mistral):** The NMF/Wanda probe directly selects the neurons to keep. The OBS step operates as a fully decoupled fixed-constraint optimization (as described in **Section 2.2**).
+- **Non-Gated FFN (OPT):** As analysed in **Section 4**, probe scores for ReLU architectures are near-uniform. For these models, the probe is used to adaptively allocate the layer-wise budget (Adaptive Slicing), while the Greedy OBS loop dynamically selects the optimal neurons via Hessian error minimization to ensure stability.
 
+### OPT Calibration Dataset
 OPT models **must** use the C4 calibration dataset to avoid distribution shift:
 ```bash
 export SARATHI_C4_PATH=/path/to/c4_calibration_subset.json
 python sarathi_main.py --model facebook/opt-6.7b --calib-dataset c4 ...
 ```
-Using WikiText for OPT causes significant accuracy degradation.
+Using WikiText for OPT causes near-random-chance zero-shot accuracy (~35% avg).
 
 ---
 
 ## Citation
 
-If you find this code useful for your research, please cite our paper:
+If you find this code useful for your research, please consider citing our paper. This citation will be updated following the double-blind review process.
 
 ```bibtex
-@inproceedings{sarathi2026,
-  title={SARATHI: Decoupled Data-Free Probing and Adaptive Reconstruction for Structured LLM Pruning},
-  booktitle={Proceedings of the 2026 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+@inproceedings{anonymous2026sarathi,
+  title={SARATHI: Structured Pruning of LLMs via NMF Residual Subspace Probing},
+  author={Anonymous Authors},
+  booktitle={Under Review (EMNLP 2026)},
   year={2026}
 }
 ```

@@ -1,17 +1,12 @@
 """
-obs_reconstruction.py — Phase 4: Adaptive OBS Weight Reconstruction
-=====================================================================
-Implements the Adaptive Optimal Brain Surgeon (OBS) weight reconstruction
-step of the SARATHI pipeline.
+obs_reconstruction_GREEDY.py — OLD Iterative Greedy OBS Weight Reconstruction
+===========================================================================
+This is the ORIGINAL implementation using the iterative greedy column pruning
+loop (_iterative_greedy_update), as it existed before the Cholesky least-squares
+optimization.
 
-For each decoder layer, given the SARATHI-selected keep_indices:
-  1. Collects calibration activations X (input to FFN) and Y (output of FFN)
-     via a forward pass through the original (pre-slice) weights.
-  2. Solves the least-squares reconstruction: W_new = argmin ||XW^T - Y||_F
-     constrained to the selected neuron subset, using Hessian regularisation.
-  3. Physically slices the layer weights to keep_indices.
-  4. Optionally applies Bias Shift Compensation to correct post-LayerNorm
-     activation mean shifts introduced by structured removal (OPT / Phi-2).
+To revert to this approach:
+    cp guide/obs_reconstruction_GREEDY_BACKUP.py guide/obs_reconstruction.py
 """
 
 import logging
@@ -222,8 +217,16 @@ def obs_reconstruct(
         post_attn_all = torch.cat(post_attn_list, dim=0)
 
         if per_layer_keep_indices is not None:
-            forced_indices = per_layer_keep_indices[layer_idx].to(layer_device)
-            K = len(forced_indices)
+            K = len(per_layer_keep_indices[layer_idx])
+            if gated:
+                # Gated FFN (LLaMA/Mistral): NMF/Wanda probe is accurate enough
+                # to directly force which neurons to keep (fully decoupled as per paper §2.2).
+                forced_indices = per_layer_keep_indices[layer_idx].to(layer_device)
+            else:
+                # Non-gated FFN (OPT/ReLU): NMF probe scores are near-uniform.
+                # Use probe only for the layer budget K; let greedy OBS dynamically
+                # select the best neurons via Hessian error minimisation (see paper §4).
+                forced_indices = None
         else:
             forced_indices = None
             orig_size = get_intermediate_size(model_name, model)
@@ -287,10 +290,13 @@ def obs_reconstruct(
 
             if fc2.bias is not None:
                 _t_bias_layer = time.time()
-                old_mean = Y_fc2_flat.to(layer_device).mean(dim=0) + fc2.bias.data
+                # Y_fc2_flat is weight-only (no bias). Compute means consistently
+                # without adding fc2.bias to both sides (they cancel and cause dim errors
+                # after slicing changes fc2 output size).
+                old_mean = Y_fc2_flat.to(layer_device).mean(dim=0)
                 X_sliced = X_ffn_flat[:, keep_indices].to(layer_device)
                 W_sliced = W_fc2_new[:, keep_indices]
-                new_mean = (X_sliced @ W_sliced.t()).mean(dim=0) + fc2.bias.data
+                new_mean = (X_sliced @ W_sliced.t()).mean(dim=0)
                 shift = old_mean - new_mean
                 _t_bias_total += time.time() - _t_bias_layer
 
